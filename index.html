@@ -10,7 +10,17 @@
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;font-family:'Raleway',system-ui,-apple-system,sans-serif;background:#FDFDFD;color:#182129;-webkit-font-smoothing:antialiased}
-  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+  #shell{display:flex;min-height:100vh}
+  #sidebar{display:none}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;flex:1}
+  .gridCards{display:flex;flex-direction:column;gap:12px}
+  .gridKpi{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(min-width:900px){
+    #sidebar.on{display:flex;flex-direction:column;justify-content:space-between;width:260px;flex-shrink:0;background:#182129;padding:22px 16px;position:sticky;top:0;height:100vh}
+    #app{max-width:1100px;margin:0 auto}
+    .gridCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+    .gridKpi{grid-template-columns:repeat(4,1fr)}
+  }
   input,textarea,button{font-family:inherit}
   input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   input[type=number]{-moz-appearance:textfield}
@@ -35,10 +45,13 @@
 </style>
 </head>
 <body>
+<div id="shell">
+<div id="sidebar"></div>
 <div id="app">
   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px;color:#94a3b8">
     <div class="spin"></div><p style="font-size:14px">Carregando...</p>
   </div>
+</div>
 </div>
 
 <script>
@@ -80,6 +93,7 @@ var uid=function(){return Math.random().toString(36).substr(2,9);};
 var toN=function(v){return(v===""||v==null)?null:parseFloat(v);};
 var fmt1=function(v){return v!=null?+v.toFixed(1):null;};
 var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
+var normalize=function(s){return String(s==null?"":s).normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase();};
 var calcBMI=function(w,h){return(!w||!h)?null:fmt1(w/Math.pow(h/100,2));};
 var bmiInfo=function(bmi){
   if(!bmi)return{label:"–",color:"#94a3b8"};
@@ -343,7 +357,7 @@ var S={
   screen:"loading",editId:null,sync:"idle",cfgLoading:false,
   loginForm:{email:"",password:""},loginError:null,loginLoading:false,
   authMode:"login",signupForm:{email:"",password:"",code:""},signupError:null,signupLoading:false,
-  guideOpen:null,guideReturnScreen:null
+  guideOpen:null,guideReturnScreen:null,searchQuery:""
 };
 var getPat=function(){for(var i=0;i<S.patients.length;i++)if(S.patients[i].id===S.selId)return S.patients[i];return null;};
 var sorted=function(){return S.patients.slice().sort(function(a,b){return a.name.localeCompare(b.name,"pt-BR",{sensitivity:"base"});});};
@@ -668,20 +682,27 @@ var topBar=function(){
 var vList=function(){
   var h='<div style="padding:16px;display:flex;flex-direction:column;gap:12px">';
   h+='<button class="btnP" data-act="newPat"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Novo Paciente</button>';
+  h+='<div style="position:relative"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" style="position:absolute;left:12px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="pat_search" class="inp" style="padding-left:36px'+(S.searchQuery?';padding-right:34px':"")+'" placeholder="Buscar paciente pelo nome..." value="'+esc(S.searchQuery||"")+'">'+(S.searchQuery?'<button data-act="clearSearch" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;padding:6px;line-height:0">✕</button>':"")+'</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btnO" data-act="exportAll" style="color:#BC7D47;border:1.5px solid #BC7D47;font-size:13px;padding:10px">📤 Exportar Backup</button><button class="btnO" data-act="importClick" style="color:#8b5cf6;border:1.5px solid #8b5cf6;font-size:13px;padding:10px">📥 Importar JSON</button></div>';
   h+='<input id="importFile" type="file" accept=".json" style="display:none">';
   h+='<button class="btnO" data-act="openGuide" style="color:#182129;border:1.5px solid #EEB770;background:#FBF0E4;font-size:13px;padding:10px">📖 Guia de Coleta (Dobras e Circunferências)</button>';
   h+='<button class="btnO" data-act="reconfig" style="color:#64748b;border:1.5px solid #cbd5e1;font-size:12px;padding:8px">⚙️ Configurar banco de dados</button>';
+  var q=normalize(S.searchQuery||"");
+  var filtered=sorted().filter(function(p){return!q||normalize(p.name).indexOf(q)>-1;});
   if(S.patients.length===0){
     h+='<div style="text-align:center;padding:40px 0;color:#94a3b8"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:12px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><div style="font-size:15px;font-weight:600;margin-bottom:4px">Nenhum paciente</div><div style="font-size:13px">Cadastre o primeiro acima</div></div>';
+  }else if(filtered.length===0){
+    h+='<div style="text-align:center;padding:40px 0;color:#94a3b8"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:12px"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><div style="font-size:14px;font-weight:600">Nenhum paciente encontrado para "'+esc(S.searchQuery)+'"</div></div>';
   }else{
-    sorted().forEach(function(p){
+    h+='<div class="gridCards">';
+    filtered.forEach(function(p){
       var age=calcAge(p.birthDate),last=p.consultations[p.consultations.length-1];
       h+='<button class="card" data-act="openPat" data-id="'+p.id+'" style="display:flex;align-items:center;gap:14px;cursor:pointer;text-align:left">';
       h+='<div style="width:48px;height:48px;border-radius:50%;background:'+(p.sex==="M"?"#dbeafe":"#fce7f3")+';color:'+(p.sex==="M"?"#1d4ed8":"#be185d")+';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0">'+esc(p.name[0].toUpperCase())+'</div>';
       h+='<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</div><div style="font-size:12px;color:#94a3b8;margin-top:2px">'+(p.sex==="M"?"Masculino":"Feminino")+(age?" · "+age+" anos":"")+' · '+p.consultations.length+' consultas</div>'+(last?'<div style="font-size:12px;color:#BC7D47;margin-top:2px">Última: '+fmtDate(last.date)+(last.weight?" · "+last.weight+" kg":"")+'</div>':"")+'</div>';
       h+='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg></button>';
     });
+    h+='</div>';
   }
   h+='</div>';
   return h;
@@ -772,7 +793,7 @@ var vResumo=function(){
   var h='<div style="display:flex;flex-direction:column;gap:14px">';
   h+='<div style="font-size:12px;color:#94a3b8">Última avaliação: '+fmtDate(last.date)+'</div>';
   var kpis=[{l:"Peso",v:last.weight?last.weight+" kg":"–",sub:dW!=null?(dW>0?"+":"")+dW+" kg":null,sc:dW!=null?(dW<0?"#22c55e":"#ef4444"):"#94a3b8"},{l:"IMC",v:last.bmi!=null?last.bmi:"–",sub:bi.label,sc:bi.color},{l:"% Gordura",v:last.bodyFat!=null?last.bodyFat+"%":"–",sub:bc.label,sc:bc.color},{l:"Σ Dobras",v:last.sfSum?last.sfSum+" mm":"–",sub:"7 dobras",sc:"#94a3b8"}];
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+  h+='<div class="gridKpi">';
   kpis.forEach(function(k){h+='<div class="card"><div style="font-size:11px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+k.l+'</div><div style="font-size:22px;font-weight:800">'+k.v+'</div>'+(k.sub?'<div style="font-size:11px;font-weight:600;color:'+k.sc+';margin-top:3px">'+k.sub+'</div>':"")+'</div>';});
   h+='</div>';
   if(last.weight&&last.leanMass){
@@ -994,8 +1015,33 @@ var vExport=function(){
 //══════════════════════════════════════════════════════════════════════════
 // RENDER
 //══════════════════════════════════════════════════════════════════════════
+var renderSidebar=function(){
+  var sb=document.getElementById("sidebar");
+  if(!sb)return;
+  var hide=S.screen==="loading"||S.screen==="setup"||S.screen==="login";
+  sb.className=hide?"":"on";
+  if(hide){sb.innerHTML="";return;}
+  var navItem=function(label,act,active){
+    return '<button data-act="'+act+'" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:'+(active?"rgba(238,183,112,.12)":"none")+';border:none;border-radius:10px;padding:10px 12px;color:'+(active?"#EEB770":"#cbd5e1")+';font-weight:'+(active?"700":"500")+';font-size:14px;cursor:pointer;font-family:Raleway,sans-serif">'+label+'</button>';
+  };
+  var isHome=S.screen==="list"||S.screen==="dash";
+  var h='<div>';
+  h+='<div style="padding:6px 12px 24px">'+roarWordmark(18)+'</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:4px">';
+  h+=navItem("🏠  Pacientes","navHome",isHome);
+  h+=navItem("➕  Novo Paciente","newPat",S.screen==="newPat");
+  h+=navItem("📖  Guia de Coleta","openGuide",S.screen==="guide");
+  h+=navItem("⚙️  Configurar banco","reconfig",false);
+  h+='</div></div>';
+  h+='<div style="border-top:1px solid rgba(255,255,255,.1);padding-top:14px;display:flex;flex-direction:column;gap:10px">';
+  h+='<div style="font-size:11px;color:#94a3b8;padding:0 12px;overflow-wrap:anywhere">'+esc(Session.email()||"")+'</div>';
+  h+='<button data-act="logout" style="background:rgba(255,255,255,.08);border:none;border-radius:10px;padding:9px 12px;color:#fff;font-weight:600;font-size:13px;cursor:pointer;text-align:left">Sair</button>';
+  h+='</div>';
+  sb.innerHTML=h;
+};
 var render=function(){
   var app=document.getElementById("app");
+  renderSidebar();
   if(S.screen==="loading"){return;}
   var h="";
   if(S.screen==="setup"){h=vSetup();}
@@ -1020,6 +1066,15 @@ var render=function(){
 // keep input values synced to state on typing (avoid re-render on every keystroke)
 var attachInputs=function(){
   var bind=function(id,fn){var el=document.getElementById(id);if(el)el.addEventListener("input",function(){fn(el.value);});};
+  // busca de pacientes (re-renderiza a lista filtrada mantendo o foco/cursor)
+  var searchEl=document.getElementById("pat_search");
+  if(searchEl)searchEl.addEventListener("input",function(){
+    S.searchQuery=searchEl.value;
+    var pos=searchEl.selectionStart;
+    render();
+    var ne=document.getElementById("pat_search");
+    if(ne){ne.focus();if(ne.setSelectionRange)ne.setSelectionRange(pos,pos);}
+  });
   // setup
   bind("su_url",function(v){S._suUrl=v;});
   bind("su_key",function(v){S._suKey=v;});
@@ -1166,6 +1221,8 @@ document.addEventListener("click",function(e){
     Session.clear();S.patients=[];S.selId=null;S.screen="login";render();
   }
   else if(act==="openGuide"){S.guideReturnScreen=S.screen;S.screen="guide";render();}
+  else if(act==="navHome"){S.selId=null;S.screen="list";render();}
+  else if(act==="clearSearch"){S.searchQuery="";render();}
   else if(act==="toggleGuide"){var gid=el.getAttribute("data-id");S.guideOpen=S.guideOpen===gid?null:gid;render();}
   else if(act==="back"){
     if(S.screen==="guide"){S.screen=S.guideReturnScreen||"list";S.guideReturnScreen=null;}
