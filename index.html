@@ -515,7 +515,7 @@ var downloadEvoCard=function(pat){
 // VIEWS (return HTML strings)
 //══════════════════════════════════════════════════════════════════════════
 var vSetup=function(){
-  var sql="CREATE TABLE patients (\n  id TEXT PRIMARY KEY,\n  name TEXT,\n  data JSONB NOT NULL,\n  updated_at TIMESTAMPTZ DEFAULT NOW()\n);\nALTER TABLE patients ENABLE ROW LEVEL SECURITY;\nCREATE POLICY \"allow_all\" ON patients\n  FOR ALL USING (true) WITH CHECK (true);";
+  var sql="CREATE TABLE patients (\n  id TEXT PRIMARY KEY,\n  name TEXT,\n  data JSONB NOT NULL,\n  updated_at TIMESTAMPTZ DEFAULT NOW()\n);\nALTER TABLE patients ENABLE ROW LEVEL SECURITY;\nCREATE POLICY \"only_logged_in_staff\" ON patients\n  FOR ALL USING (auth.role() = 'authenticated')\n  WITH CHECK (auth.role() = 'authenticated');\n\n-- Depois crie os logins da equipe em Authentication → Users";
   return '<div style="padding:20px;display:flex;flex-direction:column;gap:16px">'
     +'<div style="background:linear-gradient(135deg,#0f766e,#0d9488);border-radius:16px;padding:24px;color:#fff;text-align:center">'
       +'<img src="'+LOGO+'" style="height:70px;margin-bottom:14px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.3))">'
