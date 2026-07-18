@@ -251,27 +251,51 @@ var emptyForm=function(){
 };
 
 //══════════════════════════════════════════════════════════════════════════
-// COMANDO DE VOZ — dobras e circunferências já existentes no app
+// COMANDO DE VOZ — dobras, circunferências, peso e altura
 //══════════════════════════════════════════════════════════════════════════
-// Termos ambíguos (peitoral, coxa) exigem a palavra "dobra/prega" para
-// virar dobra cutânea; sem esse contexto, o app entende como circunferência.
-var VOICE_MAP=[
-  {group:"folds",key:"subescapular",kws:["subescapular"]},
-  {group:"folds",key:"axilarMedia",kws:["axilar media","axilar média","axilar"]},
-  {group:"folds",key:"triceps",kws:["triceps","tríceps"]},
-  {group:"folds",key:"suprailiaca",kws:["suprailiaca","suprailíaca","supra iliaca","supra ilíaca"]},
-  {group:"folds",key:"abdominal",kws:["abdominal"]},
-  {group:"folds",key:"coxa",kws:["dobra da coxa","dobra coxa","prega da coxa","prega coxa"]},
-  {group:"folds",key:"peitoral",kws:["dobra peitoral","prega peitoral","dobra do peitoral"]},
-  {group:"circs",key:"cintura",kws:["cintura"]},
-  {group:"circs",key:"abdomen",kws:["abdomen","abdômen"]},
-  {group:"circs",key:"quadril",kws:["quadril"]},
-  {group:"circs",key:"coxaProximal",kws:["coxa proximal","proximal da coxa"]},
-  {group:"circs",key:"coxaDireita",kws:["coxa direita","coxa alta"]},
-  {group:"circs",key:"bracoContraido",kws:["braço contraido","braço contraído","braco contraido","braco contraído","biceps contraido","bíceps contraído"]},
-  {group:"circs",key:"bracoRelaxado",kws:["braço relaxado","braco relaxado","braço","braco"]},
-  {group:"circs",key:"peitoral",kws:["circunferencia peitoral","circunferência peitoral","peitoral"]}
+// Cada parte do corpo aceita várias formas de falar (com/sem acento, grafias
+// alternativas). Para partes que têm dobra E circunferência (peitoral, coxa,
+// abdômen), a palavra "dobra"/"prega" em qualquer lugar da frase decide qual
+// das duas é — não precisa dizer "cutânea", só "dobra X" já basta.
+var FOLD_QUALIFIER=/\b(dobra|dobras|prega|pregas)\b/;
+var BODY_ALIASES=[
+  {part:"subescapular",words:["subescapular"]},
+  {part:"axilar",words:["axilar media","axilar média","axilar"]},
+  {part:"triceps",words:["triceps","tríceps"]},
+  {part:"suprailiaca",words:["suprailiaca","suprailíaca","supra iliaca","supra ilíaca"]},
+  {part:"abdomen",words:["abdominal","abdomen","abdômen","abdome"]},
+  {part:"coxaProximal",words:["coxa proximal","proximal da coxa"]},
+  {part:"coxaDireita",words:["coxa direita","coxa alta"]},
+  {part:"coxa",words:["coxa"]},
+  {part:"peitoral",words:["peitoral","peito"]},
+  {part:"cintura",words:["cintura"]},
+  {part:"quadril",words:["quadril"]},
+  {part:"bracoContraido",words:["braço contraido","braço contraído","braco contraido","braco contraído","biceps contraido","bíceps contraído","biceps contraído"]},
+  {part:"bracoRelaxado",words:["braço relaxado","braco relaxado","braço","braco"]},
+  {part:"peso",words:["peso"]},
+  {part:"altura",words:["altura"]}
 ];
+// Decide o campo final a partir da parte do corpo reconhecida + se a frase tem "dobra/prega"
+var resolveVoiceField=function(part,hasDobra){
+  switch(part){
+    case"subescapular":return{group:"folds",key:"subescapular",unit:"mm"};
+    case"axilar":return{group:"folds",key:"axilarMedia",unit:"mm"};
+    case"triceps":return{group:"folds",key:"triceps",unit:"mm"};
+    case"suprailiaca":return{group:"folds",key:"suprailiaca",unit:"mm"};
+    case"abdomen":return hasDobra?{group:"folds",key:"abdominal",unit:"mm"}:{group:"circs",key:"abdomen",unit:"cm"};
+    case"peitoral":return hasDobra?{group:"folds",key:"peitoral",unit:"mm"}:{group:"circs",key:"peitoral",unit:"cm"};
+    case"coxaProximal":return{group:"circs",key:"coxaProximal",unit:"cm"};
+    case"coxaDireita":return{group:"circs",key:"coxaDireita",unit:"cm"};
+    case"coxa":return hasDobra?{group:"folds",key:"coxa",unit:"mm"}:null;
+    case"cintura":return{group:"circs",key:"cintura",unit:"cm"};
+    case"quadril":return{group:"circs",key:"quadril",unit:"cm"};
+    case"bracoContraido":return{group:"circs",key:"bracoContraido",unit:"cm"};
+    case"bracoRelaxado":return{group:"circs",key:"bracoRelaxado",unit:"cm"};
+    case"peso":return{group:"basic",key:"weight",unit:"kg"};
+    case"altura":return{group:"basic",key:"height",unit:"cm"};
+  }
+  return null;
+};
 // Números por extenso em português (0–999 + decimais) — o reconhecimento de
 // voz do navegador nem sempre transcreve números como algarismos.
 var PT_UNITS={zero:0,um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,
@@ -309,15 +333,18 @@ var parseVoiceCommand=function(transcript){
   var t=normalize(transcript);
   var value=extractNumber(t);
   if(value==null||isNaN(value))return null;
-  var best=null,bestLen=0;
-  VOICE_MAP.forEach(function(entry){
-    entry.kws.forEach(function(kw){
-      var nkw=normalize(kw);
-      if(t.indexOf(nkw)>-1&&nkw.length>bestLen){best=entry;bestLen=nkw.length;}
+  var hasDobra=FOLD_QUALIFIER.test(t);
+  var bestPart=null,bestLen=0;
+  BODY_ALIASES.forEach(function(entry){
+    entry.words.forEach(function(w){
+      var nw=normalize(w);
+      if(t.indexOf(nw)>-1&&nw.length>bestLen){bestPart=entry.part;bestLen=nw.length;}
     });
   });
-  if(!best)return null;
-  return{group:best.group,key:best.key,value:value};
+  if(!bestPart)return null;
+  var field=resolveVoiceField(bestPart,hasDobra);
+  if(!field)return null;
+  return{group:field.group,key:field.key,unit:field.unit,value:value};
 };
 var Voice={
   rec:null,active:false,
@@ -336,10 +363,17 @@ var Voice={
         var transcript=e.results[i][0].transcript;
         var parsed=parseVoiceCommand(transcript);
         if(parsed){
-          S.form[parsed.group][parsed.key]=String(parsed.value);
-          var arr=parsed.group==="folds"?FOLDS:CIRCS;
-          var lbl=arr.filter(function(x){return x.key===parsed.key;})[0];
-          S.voiceStatus={ok:true,text:(lbl?lbl.label:parsed.key)+" = "+parsed.value+(parsed.group==="folds"?" mm":" cm")};
+          var lbl;
+          if(parsed.group==="basic"){
+            S.form[parsed.key]=String(parsed.value);
+            lbl=parsed.key==="weight"?"Peso":"Altura";
+          }else{
+            S.form[parsed.group][parsed.key]=String(parsed.value);
+            var arr=parsed.group==="folds"?FOLDS:CIRCS;
+            var found=arr.filter(function(x){return x.key===parsed.key;})[0];
+            lbl=found?found.label:parsed.key;
+          }
+          S.voiceStatus={ok:true,text:lbl+" = "+parsed.value+" "+parsed.unit};
           applyVoiceResult(parsed);
         }else{
           S.voiceStatus={ok:false,text:transcript};
@@ -359,13 +393,14 @@ var Voice={
 };
 // Preenche o campo direto no DOM (sem re-render completo) e destaca por 1.5s
 var applyVoiceResult=function(parsed){
-  var inp=document.querySelector('[data-'+(parsed.group==="folds"?"fold":"circ")+'="'+parsed.key+'"]');
+  var sel=parsed.group==="basic"?"#cf_"+parsed.key:'[data-'+(parsed.group==="folds"?"fold":"circ")+'="'+parsed.key+'"]';
+  var inp=document.querySelector(sel);
   if(inp){
     inp.value=parsed.value;
     inp.classList.add("voiceHit");
     setTimeout(function(){inp.classList.remove("voiceHit");},1500);
   }
-  if(parsed.group==="folds")liveCalc();
+  liveCalc();
   renderVoiceBanner();
 };
 var renderVoiceBanner=function(){
