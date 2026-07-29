@@ -143,6 +143,14 @@ var bfClass=function(bf,sex){
     return{label:"Obesidade",color:"#ef4444"};
   }
 };
+var bpInfo=function(sys,dia){
+  if(sys==null||dia==null)return{label:"–",color:"#94a3b8"};
+  if(sys>=180||dia>=120)return{label:"Crise hipertensiva",color:"#991b1b"};
+  if(sys>=140||dia>=90)return{label:"Hipertensão estágio 2",color:"#ef4444"};
+  if(sys>=130||dia>=80)return{label:"Hipertensão estágio 1",color:"#f97316"};
+  if(sys>=120)return{label:"Elevada",color:"#eab308"};
+  return{label:"Normal",color:"#22c55e"};
+};
 var sumFolds=function(f){return Object.keys(f).reduce(function(a,k){return a+(parseFloat(f[k])||0);},0);};
 var fmtDate=function(d){if(!d)return"–";var p=d.split("-");return p[2]+"/"+p[1]+"/"+p[0];};
 var dif=function(a,b){return a!=null&&b!=null?fmt1(a-b):null;};
@@ -245,7 +253,7 @@ var GUIDE=[
 ];
 
 var emptyForm=function(){
-  var f={date:new Date().toISOString().split("T")[0],weight:"",height:"",notes:"",circs:{},folds:{}};
+  var f={date:new Date().toISOString().split("T")[0],weight:"",height:"",systolic:"",diastolic:"",notes:"",circs:{},folds:{}};
   CIRCS.forEach(function(c){f.circs[c.key]="";});
   FOLDS.forEach(function(x){f.folds[x.key]="";});
   return f;
@@ -624,7 +632,7 @@ var svgChart=function(series,labels,opts){
 var genReport=function(pat){
   var cs=pat.consultations;if(!cs.length)return;
   var last=cs[cs.length-1],first=cs[0];
-  var rows=[["Peso (kg)",function(c){return c.weight;}],["Altura (cm)",function(c){return c.height;}],["IMC",function(c){return c.bmi;}],["% Gordura",function(c){return c.bodyFat;}],["Massa Magra (kg)",function(c){return c.leanMass;}],["Massa Gorda (kg)",function(c){return c.fatMass;}],["Σ Dobras (mm)",function(c){return c.sfSum;}]];
+  var rows=[["Peso (kg)",function(c){return c.weight;}],["Altura (cm)",function(c){return c.height;}],["PA Sistólica (mmHg)",function(c){return c.systolic;}],["PA Diastólica (mmHg)",function(c){return c.diastolic;}],["IMC",function(c){return c.bmi;}],["% Gordura",function(c){return c.bodyFat;}],["Massa Magra (kg)",function(c){return c.leanMass;}],["Massa Gorda (kg)",function(c){return c.fatMass;}],["Σ Dobras (mm)",function(c){return c.sfSum;}]];
   CIRCS.forEach(function(x){rows.push([x.label+" (cm)",function(c){return c.circs?c.circs[x.key]:null;}]);});
   FOLDS.forEach(function(x){rows.push([x.label+" (mm)",function(c){return c.folds?c.folds[x.key]:null;}]);});
   var thS="border:1px solid #e2e8f0;padding:8px 10px;background:#f8fafc;font-size:12px;font-weight:700;color:#64748b;white-space:nowrap;";
@@ -642,7 +650,7 @@ var genReport=function(pat){
     var tc=cs.length>1?'<td style="'+tdS+'background:#fffbeb;font-weight:800;color:'+(td==null?"#cbd5e1":td<0?"#22c55e":td>0?"#ef4444":"#94a3b8")+'">'+(td!=null?(td>0?"+":"")+td:"–")+'</td>':"";
     return'<tr><td style="'+tlS+'">'+label+'</td>'+cells+tc+'</tr>';
   }).join("");
-  var kpiArr=[["Peso",last.weight?last.weight+" kg":"–"],["Altura",last.height?last.height+" cm":"–"],["IMC",last.bmi?last.bmi+" — "+bmiInfo(last.bmi).label:"–"],["% Gordura",last.bodyFat!=null?last.bodyFat+"%":"–"],["Massa Magra",last.leanMass!=null?last.leanMass+" kg":"–"],["Massa Gorda",last.fatMass!=null?last.fatMass+" kg":"–"],["Σ Dobras",last.sfSum?last.sfSum+" mm":"–"]];
+  var kpiArr=[["Peso",last.weight?last.weight+" kg":"–"],["Altura",last.height?last.height+" cm":"–"],["Pressão Arterial",(last.systolic!=null&&last.diastolic!=null)?last.systolic+"/"+last.diastolic+" mmHg — "+bpInfo(last.systolic,last.diastolic).label:"–"],["IMC",last.bmi?last.bmi+" — "+bmiInfo(last.bmi).label:"–"],["% Gordura",last.bodyFat!=null?last.bodyFat+"%":"–"],["Massa Magra",last.leanMass!=null?last.leanMass+" kg":"–"],["Massa Gorda",last.fatMass!=null?last.fatMass+" kg":"–"],["Σ Dobras",last.sfSum?last.sfSum+" mm":"–"]];
   var kpis=kpiArr.map(function(k){return'<tr><td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:13px;">'+k[0]+'</td><td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;font-weight:700;font-size:13px;">'+k[1]+'</td></tr>';}).join("");
   var age=calcAge(pat.birthDate);
   var html='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AntroMed — '+esc(pat.name)+'</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet"><style>h1{font-family:"Playfair Display",Georgia,serif}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Raleway,system-ui,sans-serif;background:#FDFDFD}.page{max-width:900px;margin:0 auto;padding:32px 24px}.hdr{background:linear-gradient(135deg,#182129,#293C49);border-radius:16px;padding:28px 32px;color:#fff;margin-bottom:28px}.card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:22px;margin-bottom:20px}h2{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px}table{width:100%;border-collapse:collapse}.ov{overflow-x:auto}@media print{body{background:#fff}.np{display:none}.page{padding:16px}.hdr{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="page"><div class="hdr"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px"><div><h1 style="font-size:28px;font-weight:800;margin-bottom:6px">'+esc(pat.name)+'</h1><p style="font-size:14px;color:#EEB770">'+(pat.sex==="M"?"Masculino":"Feminino")+(age?" · "+age+" anos":"")+(pat.birthDate?" · Nasc. "+fmtDate(pat.birthDate):"")+'</p><p style="font-size:13px;color:#EEB770;margin-top:4px">'+cs.length+' avaliação(ões)</p></div><div style="text-align:right"><p style="font-size:12px;color:#EEB770">Gerado em</p><p style="font-size:15px;font-weight:700">'+new Date().toLocaleDateString("pt-BR")+'</p><button class="np" onclick="window.print()" style="margin-top:10px;background:rgba(255,255,255,.25);border:none;border-radius:8px;padding:8px 16px;color:#fff;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button></div></div></div><div class="card"><h2>📋 Última Avaliação — '+fmtDate(last.date)+'</h2><table>'+kpis+'</table></div><div class="card"><h2>📅 Histórico Completo</h2><div class="ov"><table><thead><tr><th style="'+thS+'text-align:left;min-width:160px">Medida</th>'+hdr+'</tr></thead><tbody>'+body+'</tbody></table></div></div><p style="text-align:center;padding:20px;font-size:12px;color:#94a3b8">AntroMed · Jackson-Pollock 7 dobras · Siri (1961)</p></div></body></html>';
@@ -932,6 +940,7 @@ var vConsult=function(){
   h+='<div class="card"><div class="sec">📅 Dados Básicos</div><div style="display:flex;flex-direction:column;gap:14px">';
   h+='<div><label class="lbl">Data</label><input id="cf_date" type="date" class="inp" value="'+esc(f.date)+'"></div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><label class="lbl">Peso (kg)</label><input id="cf_weight" type="number" step="0.1" class="inp" placeholder="0.0" value="'+esc(f.weight)+'"></div><div><label class="lbl">Altura (cm)</label><input id="cf_height" type="number" step="0.1" class="inp" placeholder="0.0" value="'+esc(f.height)+'"></div></div>';
+  h+='<div><label class="lbl">Pressão Arterial (mmHg)</label><div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center"><input id="cf_systolic" type="number" step="1" class="inp" placeholder="Sistólica" value="'+esc(f.systolic)+'"><span style="color:#94a3b8;font-weight:700">/</span><input id="cf_diastolic" type="number" step="1" class="inp" placeholder="Diastólica" value="'+esc(f.diastolic)+'"></div></div>';
   h+='<div><label class="lbl">Observações</label><textarea id="cf_notes" class="inp" style="resize:none;height:68px" placeholder="Notas clínicas...">'+esc(f.notes)+'</textarea></div>';
   h+='</div></div>';
   // results
@@ -970,10 +979,10 @@ var vResumo=function(){
   var pat=getPat(),cs=pat.consultations;
   if(!cs.length)return '<div style="text-align:center;padding:40px 0;color:#94a3b8;font-size:14px">Nenhuma avaliação. Toque em "Nova" para iniciar.</div>';
   var last=cs[cs.length-1],prev=cs.length>1?cs[cs.length-2]:null;
-  var bi=bmiInfo(last.bmi),dW=dif(last.weight,prev?prev.weight:null),bc=bfClass(last.bodyFat,pat.sex);
+  var bi=bmiInfo(last.bmi),dW=dif(last.weight,prev?prev.weight:null),bc=bfClass(last.bodyFat,pat.sex),bp=bpInfo(last.systolic,last.diastolic);
   var h='<div style="display:flex;flex-direction:column;gap:14px">';
   h+='<div style="font-size:12px;color:#94a3b8">Última avaliação: '+fmtDate(last.date)+'</div>';
-  var kpis=[{l:"Peso",v:last.weight?last.weight+" kg":"–",sub:dW!=null?(dW>0?"+":"")+dW+" kg":null,sc:dW!=null?(dW<0?"#22c55e":"#ef4444"):"#94a3b8"},{l:"IMC",v:last.bmi!=null?last.bmi:"–",sub:bi.label,sc:bi.color},{l:"% Gordura",v:last.bodyFat!=null?last.bodyFat+"%":"–",sub:bc.label,sc:bc.color},{l:"Σ Dobras",v:last.sfSum?last.sfSum+" mm":"–",sub:"7 dobras",sc:"#94a3b8"}];
+  var kpis=[{l:"Peso",v:last.weight?last.weight+" kg":"–",sub:dW!=null?(dW>0?"+":"")+dW+" kg":null,sc:dW!=null?(dW<0?"#22c55e":"#ef4444"):"#94a3b8"},{l:"IMC",v:last.bmi!=null?last.bmi:"–",sub:bi.label,sc:bi.color},{l:"% Gordura",v:last.bodyFat!=null?last.bodyFat+"%":"–",sub:bc.label,sc:bc.color},{l:"Σ Dobras",v:last.sfSum?last.sfSum+" mm":"–",sub:"7 dobras",sc:"#94a3b8"},{l:"Pressão Arterial",v:(last.systolic!=null&&last.diastolic!=null)?last.systolic+"/"+last.diastolic:"–",sub:bp.label,sc:bp.color}];
   h+='<div class="gridKpi">';
   kpis.forEach(function(k){h+='<div class="card"><div style="font-size:11px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+k.l+'</div><div style="font-size:22px;font-weight:800">'+k.v+'</div>'+(k.sub?'<div style="font-size:11px;font-weight:600;color:'+k.sc+';margin-top:3px">'+k.sub+'</div>':"")+'</div>';});
   h+='</div>';
@@ -1002,7 +1011,7 @@ var vHistorico=function(){
   var pat=getPat(),cs=pat.consultations;
   if(!cs.length)return '<div style="text-align:center;padding:40px 0;color:#94a3b8;font-size:14px">Nenhuma avaliação registrada.</div>';
   var first=cs[0],last=cs[cs.length-1];
-  var rows=[{label:"Peso (kg)",g:function(c){return c.weight;}},{label:"Altura (cm)",g:function(c){return c.height;}},{label:"IMC",g:function(c){return c.bmi;}},{label:"% Gordura",g:function(c){return c.bodyFat;}},{label:"Massa Magra (kg)",g:function(c){return c.leanMass;}},{label:"Massa Gorda (kg)",g:function(c){return c.fatMass;}},{label:"Σ Dobras (mm)",g:function(c){return c.sfSum;}},{label:"── CIRCUNFERÊNCIAS ──",head:true}];
+  var rows=[{label:"Peso (kg)",g:function(c){return c.weight;}},{label:"Altura (cm)",g:function(c){return c.height;}},{label:"PA Sistólica (mmHg)",g:function(c){return c.systolic;}},{label:"PA Diastólica (mmHg)",g:function(c){return c.diastolic;}},{label:"IMC",g:function(c){return c.bmi;}},{label:"% Gordura",g:function(c){return c.bodyFat;}},{label:"Massa Magra (kg)",g:function(c){return c.leanMass;}},{label:"Massa Gorda (kg)",g:function(c){return c.fatMass;}},{label:"Σ Dobras (mm)",g:function(c){return c.sfSum;}},{label:"── CIRCUNFERÊNCIAS ──",head:true}];
   CIRCS.forEach(function(x){rows.push({label:x.label,g:function(c){return c.circs?c.circs[x.key]:null;}});});
   rows.push({label:"── DOBRAS CUTÂNEAS ──",head:true});
   FOLDS.forEach(function(x){rows.push({label:x.label,g:function(c){return c.folds?c.folds[x.key]:null;}});});
@@ -1278,6 +1287,8 @@ var attachInputs=function(){
   bind("cf_date",function(v){S.form.date=v;});
   bind("cf_weight",function(v){S.form.weight=v;liveCalc();});
   bind("cf_height",function(v){S.form.height=v;liveCalc();});
+  bind("cf_systolic",function(v){S.form.systolic=v;});
+  bind("cf_diastolic",function(v){S.form.diastolic=v;});
   bind("cf_notes",function(v){S.form.notes=v;});
   document.querySelectorAll("[data-circ]").forEach(function(el){el.addEventListener("input",function(){S.form.circs[el.getAttribute("data-circ")]=el.value;});});
   document.querySelectorAll("[data-fold]").forEach(function(el){el.addEventListener("input",function(){S.form.folds[el.getAttribute("data-fold")]=el.value;liveCalc();});});
@@ -1446,7 +1457,7 @@ document.addEventListener("click",function(e){
     var bmi=calcBMI(toN(f.weight),toN(f.height));
     var bf=calcBF(f.folds,age,pat?pat.sex:"M");
     var w=toN(f.weight)||0,sf=fmt1(sumFolds(f.folds));
-    var entry={id:S.editId||uid(),date:f.date,weight:toN(f.weight),height:toN(f.height),bmi:bmi,circs:{},folds:{},bodyFat:bf,fatMass:bf&&w?fmt1(w*bf/100):null,leanMass:bf&&w?fmt1(w*(1-bf/100)):null,sfSum:sf,notes:f.notes};
+    var entry={id:S.editId||uid(),date:f.date,weight:toN(f.weight),height:toN(f.height),systolic:toN(f.systolic),diastolic:toN(f.diastolic),bmi:bmi,circs:{},folds:{},bodyFat:bf,fatMass:bf&&w?fmt1(w*bf/100):null,leanMass:bf&&w?fmt1(w*(1-bf/100)):null,sfSum:sf,notes:f.notes};
     CIRCS.forEach(function(c){entry.circs[c.key]=toN(f.circs[c.key]);});
     FOLDS.forEach(function(x){entry.folds[x.key]=toN(f.folds[x.key]);});
     var newCs;
@@ -1462,7 +1473,7 @@ document.addEventListener("click",function(e){
     var cid=el.getAttribute("data-id");
     var c=null;pat.consultations.forEach(function(x){if(x.id===cid)c=x;});
     if(!c)return;
-    var nf={date:c.date,weight:c.weight!=null?String(c.weight):"",height:c.height!=null?String(c.height):"",notes:c.notes||"",circs:{},folds:{}};
+    var nf={date:c.date,weight:c.weight!=null?String(c.weight):"",height:c.height!=null?String(c.height):"",systolic:c.systolic!=null?String(c.systolic):"",diastolic:c.diastolic!=null?String(c.diastolic):"",notes:c.notes||"",circs:{},folds:{}};
     CIRCS.forEach(function(x){nf.circs[x.key]=c.circs&&c.circs[x.key]!=null?String(c.circs[x.key]):"";});
     FOLDS.forEach(function(x){nf.folds[x.key]=c.folds&&c.folds[x.key]!=null?String(c.folds[x.key]):"";});
     S.form=nf;S.editId=cid;S.screen="consult";render();
