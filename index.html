@@ -355,6 +355,25 @@ var parseVoiceCommand=function(transcript){
   if(!field)return null;
   return{group:field.group,key:field.key,unit:field.unit,value:value};
 };
+// Pressão arterial fala dois números na mesma frase ("pressão 120 por 80") — trata à parte.
+var extractAllNumbers=function(t){
+  var nums=[];
+  var digits=t.match(/\d+(?:[.,]\d+)?/g);
+  if(digits&&digits.length>=2)return digits.map(function(d){return parseFloat(d.replace(",","."));});
+  var tokens=t.split(/\s+/),i=0;
+  while(i<tokens.length){
+    var r=parsePtNumberTokens(tokens,i);
+    if(r){nums.push(r.value);i+=r.consumed;}else{i++;}
+  }
+  return nums;
+};
+var parseBloodPressure=function(transcript){
+  var t=normalize(transcript);
+  if(!/\bpressao\b/.test(t))return null;
+  var nums=extractAllNumbers(t);
+  if(nums.length<2)return null;
+  return{systolic:nums[0],diastolic:nums[1]};
+};
 var Voice={
   rec:null,active:false,
   supported:function(){return!!(window.SpeechRecognition||window.webkitSpeechRecognition);},
@@ -365,11 +384,15 @@ var Voice={
     this.rec=new SR();
     this.rec.lang="pt-BR";
     this.rec.continuous=true;
-    this.rec.interimResults=false;
+    // interimResults=true: processa a fala assim que reconhecida, sem esperar
+    // o navegador detectar pausa/silêncio no final da frase (bem mais rápido).
+    this.rec.interimResults=true;
     this.rec.onresult=function(e){
       for(var i=e.resultIndex;i<e.results.length;i++){
-        if(!e.results[i].isFinal)continue;
-        var transcript=e.results[i][0].transcript;
+        var res=e.results[i];
+        var transcript=res[0].transcript;
+        var bp=parseBloodPressure(transcript);
+        if(bp){applyBloodPressure(bp);continue;}
         var parsed=parseVoiceCommand(transcript);
         if(parsed){
           var lbl;
@@ -384,7 +407,9 @@ var Voice={
           }
           S.voiceStatus={ok:true,text:lbl+" = "+parsed.value+" "+parsed.unit};
           applyVoiceResult(parsed);
-        }else{
+        }else if(res.isFinal){
+          // só mostra "não entendi" quando a frase realmente terminou —
+          // evita alarme falso enquanto a pessoa ainda está falando
           S.voiceStatus={ok:false,text:transcript};
           renderVoiceBanner();
         }
@@ -409,6 +434,21 @@ var applyVoiceResult=function(parsed){
     inp.classList.add("voiceHit");
     setTimeout(function(){inp.classList.remove("voiceHit");},1500);
   }
+  liveCalc();
+  renderVoiceBanner();
+};
+var applyBloodPressure=function(bp){
+  S.form.systolic=String(bp.systolic);
+  S.form.diastolic=String(bp.diastolic);
+  ["cf_systolic","cf_diastolic"].forEach(function(id,idx){
+    var inp=document.getElementById(id);
+    if(inp){
+      inp.value=idx===0?bp.systolic:bp.diastolic;
+      inp.classList.add("voiceHit");
+      setTimeout(function(){inp.classList.remove("voiceHit");},1500);
+    }
+  });
+  S.voiceStatus={ok:true,text:"Pressão Arterial = "+bp.systolic+"/"+bp.diastolic+" mmHg"};
   liveCalc();
   renderVoiceBanner();
 };
@@ -931,7 +971,7 @@ var vConsult=function(){
       +(S.voiceActive?'<span class="voicePulse">🔴</span> Ouvindo... Toque para Parar':'🎤 Ativar Modo de Voz')+'</button>';
     if(S.voiceActive){
       h+='<div style="background:#182129;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#cbd5e1;line-height:1.5">'
-        +'<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">🎙️ Diga o nome da medida e o número</div>'
+        +'<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">🎙️ Diga o nome da medida e o número (ex: "peso 84", "pressão 120 por 80")</div>'
         +'<div id="voiceBanner">'+(S.voiceStatus?(S.voiceStatus.ok?'<span style="color:#4ade80">✅ Captado:</span> '+esc(S.voiceStatus.text):'<span style="color:#fbbf24">❓ Não entendi:</span> "'+esc(S.voiceStatus.text)+'"'):'Aguardando...')+'</div>'
       +'</div>';
     }
