@@ -1,0 +1,48 @@
+name: Backup diário do AntroMed
+
+on:
+  schedule:
+    # 01:00 UTC = 22:00 horário de Brasília (UTC-3, sem horário de verão)
+    - cron: "0 1 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Baixa todos os pacientes do Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          mkdir -p backups
+          STAMP=$(date -u -d '-3 hours' +'%Y-%m-%d_%H%M')
+          curl -sS -f \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
+            "${SUPABASE_URL%/}/rest/v1/patients?select=data" \
+            -o "backups/raw_${STAMP}.json"
+          node -e "
+            const fs=require('fs');
+            const rows=JSON.parse(fs.readFileSync('backups/raw_${STAMP}.json','utf8'));
+            const patients=rows.map(r=>r.data);
+            const out={version:1,exportDate:new Date().toISOString(),source:'backup-automatico',patients};
+            fs.writeFileSync('backups/antromed_${STAMP}.json', JSON.stringify(out,null,2));
+            fs.unlinkSync('backups/raw_${STAMP}.json');
+            console.log('Backup salvo com', patients.length, 'paciente(s).');
+          "
+
+      - name: Commit do backup
+        run: |
+          git config user.name "antromed-backup-bot"
+          git config user.email "actions@github.com"
+          git add backups/
+          git diff --cached --quiet && echo "Nada novo para commitar" && exit 0
+          git commit -m "Backup automático $(date -u -d '-3 hours' +'%Y-%m-%d %H:%M') (horário de Brasília)"
+          git push
