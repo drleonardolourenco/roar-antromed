@@ -125,9 +125,13 @@ var calcBF=function(folds,age,sex){
   var keys=["peitoral","axilarMedia","triceps","coxa","suprailiaca","abdominal","subescapular"];
   var sum=keys.reduce(function(a,k){return a+(parseFloat(folds[k])||0);},0);
   if(!sum||!age)return null;
+  // Jackson-Pollock 7 dobras (1978/1980): o termo quadrático da soma é SOMADO,
+  // não subtraído — estava com o sinal trocado, o que inflava a densidade
+  // corporal (BF% resultante ficava artificialmente maior, e cada vez mais
+  // errado quanto maior a soma das dobras).
   var dc=sex==="M"
-    ?1.112-(0.00043499*sum+0.00000055*sum*sum)-(0.0002882*age)
-    :1.0970-(0.00046971*sum+0.00000056*sum*sum)-(0.00012828*age);
+    ?1.112-0.00043499*sum+0.00000055*sum*sum-0.00028826*age
+    :1.0970-0.00046971*sum+0.00000056*sum*sum-0.00012828*age;
   return fmt1((4.95/dc-4.50)*100);
 };
 var bfClass=function(bf,sex){
