@@ -513,6 +513,11 @@ var createSupa=function(cfg){
     }
   };
 };
+// Credenciais padrão do banco da clínica: fazem o app abrir já conectado em
+// qualquer computador/navegador, sem passar pela tela de setup. É a anon public
+// key (feita para rodar no cliente) e a tabela patients tem RLS exigindo
+// auth.role()='authenticated' — sem login não lê nem grava nada.
+var DEFAULT_CFG={url:"https://lfmmcgvaaqoklnvqttsr.supabase.co",key:"sb_publishable_Xbot9sKsHT8nlUxKm-dQIA_KcIxxHaV"};
 var cfgStore={
   load:function(){try{var r=localStorage.getItem("antro-cfg");return r?JSON.parse(r):null;}catch(e){return null;}},
   save:function(c){try{localStorage.setItem("antro-cfg",JSON.stringify(c));}catch(e){}},
@@ -578,7 +583,7 @@ var Session={
 var S={
   cfg:null,supa:null,auth:null,patients:[],selId:null,tab:"resumo",
   form:emptyForm(),pForm:{name:"",birthDate:"",sex:"M"},epData:null,
-  screen:"loading",editId:null,sync:"idle",cfgLoading:false,
+  screen:"loading",editId:null,sync:"idle",cfgLoading:false,cfgTesting:false,
   loginForm:{email:"",password:""},loginError:null,loginLoading:false,
   authMode:"login",signupForm:{email:"",password:"",code:""},signupError:null,signupLoading:false,
   guideOpen:null,guideReturnScreen:null,searchQuery:"",
@@ -887,7 +892,7 @@ var vGuide=function(){
 
 var topBar=function(){
   var pat=getPat();
-  var title=S.screen==="setup"?"Configuração":S.screen==="list"?"AntroMed":S.screen==="newPat"?"Novo Paciente":S.screen==="editPat"?"Editar Paciente":S.screen==="guide"?"Guia de Coleta":S.screen==="consult"?(S.editId?"Editar Avaliação":"Nova Avaliação"):(pat?pat.name:"AntroMed");
+  var title=S.screen==="setup"?"Configuração":S.screen==="config"?"Configurações":S.screen==="list"?"AntroMed":S.screen==="newPat"?"Novo Paciente":S.screen==="editPat"?"Editar Paciente":S.screen==="guide"?"Guia de Coleta":S.screen==="consult"?(S.editId?"Editar Avaliação":"Nova Avaliação"):(pat?pat.name:"AntroMed");
   var syncLabel=S.sync==="syncing"?"⏳":S.sync==="ok"?"☁️ Sincronizado":S.sync==="error"?"⚠️ Erro":"";
   var back=S.screen!=="list"&&S.screen!=="setup";
   var h='<div style="position:relative;overflow:hidden;background:linear-gradient(135deg,#182129,#293C49);padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100">';
@@ -912,7 +917,7 @@ var vList=function(){
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btnO" data-act="exportAll" style="color:#BC7D47;border:1.5px solid #BC7D47;font-size:13px;padding:10px">📤 Exportar Backup</button><button class="btnO" data-act="importClick" style="color:#8b5cf6;border:1.5px solid #8b5cf6;font-size:13px;padding:10px">📥 Importar JSON</button></div>';
   h+='<input id="importFile" type="file" accept=".json" style="display:none">';
   h+='<button class="btnO" data-act="openGuide" style="color:#182129;border:1.5px solid #EEB770;background:#FBF0E4;font-size:13px;padding:10px">📖 Guia de Coleta (Dobras e Circunferências)</button>';
-  h+='<button class="btnO" data-act="reconfig" style="color:#64748b;border:1.5px solid #cbd5e1;font-size:12px;padding:8px">⚙️ Configurar banco de dados</button>';
+  h+='<button class="btnO" data-act="openConfig" style="color:#64748b;border:1.5px solid #cbd5e1;font-size:12px;padding:8px">⚙️ Configurações</button>';
   var q=normalize(S.searchQuery||"");
   var filtered=sorted().filter(function(p){return!q||normalize(p.name).indexOf(q)>-1;});
   if(S.patients.length===0){
@@ -1250,6 +1255,72 @@ var vExport=function(){
 };
 
 //══════════════════════════════════════════════════════════════════════════
+// CONFIGURAÇÕES (conta, equipe, banco)
+//══════════════════════════════════════════════════════════════════════════
+var vConfig=function(){
+  var email=Session.email()||"";
+  var conectado=!!S.supa;
+  var host=S.cfg&&S.cfg.url?S.cfg.url.replace(/^https?:\/\//,"").replace(/\/$/,""):"—";
+  var linha=function(rot,val){
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #f1f5f9"><span style="font-size:13px;color:#64748b;flex-shrink:0">'+rot+'</span><span style="font-size:13px;font-weight:700;text-align:right;overflow-wrap:anywhere">'+esc(val)+'</span></div>';
+  };
+  var h='<div style="display:flex;flex-direction:column;gap:14px">';
+
+  // ── Minha conta
+  h+='<div class="card"><div class="sec">👤 Minha conta</div>'
+    +linha("E-mail",email||"não identificado")
+    +linha("Status",conectado?"Conectado ao banco da clínica":"Modo offline (só neste computador)")
+    +'<div style="display:flex;flex-direction:column;gap:9px;margin-top:14px">'
+    +'<button class="btnO" data-act="changeMyPass" style="color:#BC7D47;border:1.5px solid #BC7D47;font-size:13px;padding:10px">🔑 Alterar minha senha</button>'
+    +'<button class="btnO" data-act="logout" style="color:#ef4444;border:1.5px solid #fecaca;font-size:13px;padding:10px">🚪 Sair da conta</button>'
+    +'</div>'
+    +'<p style="font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.5">Ao alterar a senha, você recebe um e-mail com o link para escolher a nova.</p>'
+    +'</div>';
+
+  // ── Equipe
+  h+='<div class="card"><div class="sec">👩‍⚕️ Equipe — criar acesso para uma enfermeira</div>'
+    +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:12px">Cada pessoa deve ter o seu próprio login. Peça para ela abrir o AntroMed, tocar em <b>“Criar conta”</b> e preencher e-mail, senha e o código abaixo.</p>'
+    +'<div style="background:#FBF0E4;border:1.5px solid #EEB770;border-radius:12px;padding:14px;text-align:center">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:#8a6a3f;text-transform:uppercase;margin-bottom:6px">Código da Clínica</div>'
+      +'<div class="titulo" style="font-size:26px;font-weight:800;letter-spacing:.12em;color:#182129">'+esc(CLINIC_CODE)+'</div>'
+      +'<button data-act="copyCode" style="margin-top:10px;background:#fff;border:1.5px solid #EEB770;border-radius:999px;padding:7px 16px;font-size:12px;font-weight:700;color:#182129;cursor:pointer">📋 Copiar código</button>'
+    +'</div>'
+    +'<ol style="font-size:12.5px;color:#475569;line-height:1.9;padding-left:18px;margin-top:14px">'
+      +'<li>Envie o link do AntroMed para a enfermeira.</li>'
+      +'<li>Ela toca em <b>Criar conta</b>, informa e-mail e senha (mínimo 6 caracteres).</li>'
+      +'<li>Cola o código da clínica e confirma.</li>'
+      +'<li>Ela confirma o e-mail recebido e já pode entrar.</li>'
+    +'</ol>'
+    +'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 13px;font-size:11.5px;color:#92400e;line-height:1.6;margin-top:12px">⚠️ O código libera acesso a todos os prontuários. Compartilhe só com a equipe e avise a administração se ele vazar.</div>'
+    +'</div>';
+
+  // ── Banco de dados
+  h+='<div class="card"><div class="sec">🗄️ Banco de dados</div>'
+    +linha("Servidor",host)
+    +linha("Pacientes carregados",String(S.patients.length))
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px">'
+    +'<button class="btnO" data-act="cfgTest" style="color:#182129;border:1.5px solid #EEB770;background:#FBF0E4;font-size:13px;padding:10px"'+(S.cfgTesting?" disabled":"")+'>'+(S.cfgTesting?"⏳ Testando...":"🔌 Testar conexão")+'</button>'
+    +'<button class="btnO" data-act="refresh" style="color:#64748b;border:1.5px solid #cbd5e1;font-size:13px;padding:10px">🔄 Recarregar dados</button>'
+    +'</div></div>';
+
+  // ── Backup
+  h+='<div class="card"><div class="sec">💾 Backup</div>'
+    +'<p style="font-size:12.5px;color:#475569;line-height:1.7;margin-bottom:12px">Uma cópia de todos os pacientes é salva automaticamente todos os dias às 22h. Você também pode baixar uma cópia agora.</p>'
+    +'<button class="btnO" data-act="exportAll" style="color:#BC7D47;border:1.5px solid #BC7D47;font-size:13px;padding:10px">📤 Baixar backup agora</button>'
+    +'</div>';
+
+  // ── Avançado
+  h+='<div class="card" style="border:1px solid #fecaca"><div class="sec" style="color:#ef4444">🛠️ Avançado</div>'
+    +'<p style="font-size:12.5px;color:#475569;line-height:1.7;margin-bottom:12px">Use apenas com orientação técnica. Trocar o banco desconecta este computador dos dados da clínica.</p>'
+    +'<button class="btnO" data-act="reconfig" style="color:#64748b;border:1.5px solid #cbd5e1;font-size:12.5px;padding:9px">⚙️ Configurar outro banco de dados</button>'
+    +'</div>';
+
+  h+='<div style="text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.6;padding:4px 8px 12px">AntroMed · Instituto ROAR<br>Protocolo Jackson-Pollock 7 dobras · Siri (1961)</div>';
+  h+='</div>';
+  return h;
+};
+
+//══════════════════════════════════════════════════════════════════════════
 // RENDER
 //══════════════════════════════════════════════════════════════════════════
 var renderSidebar=function(){
@@ -1268,7 +1339,7 @@ var renderSidebar=function(){
   h+=navItem("🏠  Pacientes","navHome",isHome);
   h+=navItem("➕  Novo Paciente","newPat",S.screen==="newPat");
   h+=navItem("📖  Guia de Coleta","openGuide",S.screen==="guide");
-  h+=navItem("⚙️  Configurar banco","reconfig",false);
+  h+=navItem("⚙️  Configurações","openConfig",S.screen==="config");
   h+='</div></div>';
   h+='<div style="border-top:1px solid rgba(255,255,255,.1);padding-top:14px;display:flex;flex-direction:column;gap:10px">';
   h+='<div style="font-size:11px;color:#94a3b8;padding:0 12px;overflow-wrap:anywhere">'+esc(Session.email()||"")+'</div>';
@@ -1289,6 +1360,7 @@ var render=function(){
     else if(S.screen==="newPat")h+='<div style="flex:1;overflow-y:auto">'+vNewPat()+'</div>';
     else if(S.screen==="editPat")h+='<div style="flex:1;overflow-y:auto">'+vEditPat()+'</div>';
     else if(S.screen==="guide")h+='<div style="flex:1;overflow-y:auto;padding:16px">'+vGuide()+'</div>';
+    else if(S.screen==="config")h+='<div style="flex:1;overflow-y:auto;padding:16px">'+vConfig()+'</div>';
     else if(S.screen==="consult")h+='<div style="flex:1;overflow-y:auto">'+vConsult()+'</div>';
     else if(S.screen==="dash"){
       h+=tabBar();
@@ -1475,6 +1547,23 @@ document.addEventListener("click",function(e){
   else if(act==="newConsult"){S.form=emptyForm();S.editId=null;S.screen="consult";render();}
   else if(act==="newPat"){S.pForm={name:"",birthDate:"",sex:"M"};S.screen="newPat";render();}
   else if(act==="reconfig"){S.screen="setup";render();}
+  else if(act==="openConfig"){S.screen="config";render();}
+  else if(act==="copyCode"){
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(CLINIC_CODE).then(function(){showToast("Código copiado!");},function(){showToast("Copie manualmente: "+CLINIC_CODE,false);});
+    else showToast("Copie manualmente: "+CLINIC_CODE,false);
+  }
+  else if(act==="changeMyPass"){
+    var meuEmail=Session.email();
+    if(!meuEmail||!S.auth){showToast("Faça login primeiro",false);return;}
+    S.auth.recover(meuEmail).then(function(){showToast("E-mail enviado para "+meuEmail);})
+    .catch(function(err){showToast("Erro: "+err.message,false);});
+  }
+  else if(act==="cfgTest"){
+    if(!S.supa){showToast("Modo offline — sem banco conectado",false);return;}
+    S.cfgTesting=true;render();
+    S.supa.test().then(function(){S.cfgTesting=false;render();showToast("Conexão OK");})
+    .catch(function(err){S.cfgTesting=false;render();showToast("Falhou: "+err.message,false);});
+  }
   else if(act==="npSex"){S.pForm.sex=el.getAttribute("data-sex");render();}
   else if(act==="epSex"){S.epData.sex=el.getAttribute("data-sex");render();}
   else if(act==="addPat"){
@@ -1558,7 +1647,7 @@ document.addEventListener("click",function(e){
 // INIT
 //══════════════════════════════════════════════════════════════════════════
 (function init(){
-  var saved=cfgStore.load();
+  var saved=cfgStore.load()||DEFAULT_CFG;
   if(saved){
     S.cfg=saved;S.supa=createSupa(saved);
     S.auth=createAuth(saved);Session.auth=S.auth;Session.load();
